@@ -216,16 +216,6 @@ body {
   }
 }
 
-.captured-photo {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 35px;
-  z-index: 1;
-}
 
 /* .take-photo-button {
   position: absolute;

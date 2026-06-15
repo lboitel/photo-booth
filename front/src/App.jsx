@@ -88,15 +88,7 @@ export default function App() {
     setPhotoTaken(photoDataUrl);
     setIsSaving(true);
 
-    // Simulate loading screen for 5 seconds, then return to home
-    setTimeout(() => {
-      setIsSaving(false);
-      setPhotoTaken(null);
-      setShowWebcam(false);
-      setDrops([]);
-    }, 5000);
-
-    // Send photo to server asynchronously without blocking user flow
+    // Save the photo asynchronously without blocking the print flow
     fetch('http://localhost:3001/api/save-photo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -108,6 +100,27 @@ export default function App() {
       })
       .catch((error) => {
         console.error('Error saving photo:', error);
+      });
+
+    // Print the photo, then return to home once printing is done
+    fetch('http://localhost:3001/api/print-photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photo: photoDataUrl })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) throw new Error(data.error);
+        console.log('Photo printed');
+      })
+      .catch((error) => {
+        console.error('Error printing photo:', error);
+      })
+      .finally(() => {
+        setIsSaving(false);
+        setPhotoTaken(null);
+        setShowWebcam(false);
+        setDrops([]);
       });
   };
 
@@ -149,9 +162,6 @@ export default function App() {
               </div>
             )}
           </>
-        )}
-        {photoTaken && !isSaving && (
-          <img src={photoTaken} alt="Captured photo" className="captured-photo" />
         )}
         {isSaving && (
           <div className="loading-overlay">
