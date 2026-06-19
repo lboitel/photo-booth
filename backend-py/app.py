@@ -1,6 +1,7 @@
 import base64
 import os
 import time
+import traceback
 from io import BytesIO
 from pathlib import Path
 
@@ -75,7 +76,7 @@ def print_photo():
             brightness=PRINTER_BRIGHTNESS,
         )
     except Exception as exc:
-        return jsonify({"error": f"Printing failed: {exc}"}), 500
+        return jsonify({"error": f"Printing failed: {exc}", "traceback": traceback.format_exc()}), 500
 
     return jsonify({"success": True})
 
