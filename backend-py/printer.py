@@ -1,6 +1,6 @@
 import asyncio
 
-from bleak import BleakClient
+from bleak import BleakClient, BleakScanner
 from PIL import Image, ImageEnhance
 
 ESC = b"\x1b"
@@ -55,26 +55,31 @@ def image_to_escpos(
 
     return header + bytes(data)
 
-
 async def send_to_printer(
     address: str,
     char_uuid: str,
     payload: bytes,
     chunk_size: int = 180,
     delay: float = 0.02,
-) -> None:
-    """Connect over BLE and stream the ESC/POS payload to the printer."""
-    async with BleakClient(address) as client:
+):
+
+    device = await BleakScanner.find_device_by_address(
+        address,
+        timeout=10.0,
+    )
+
+    print(device)
+
+    async with BleakClient(device) as client:
+        print("connected:", client.is_connected)
+
         for i in range(0, len(payload), chunk_size):
-            chunk = payload[i : i + chunk_size]
-            await client.write_gatt_char(char_uuid, chunk, response=False)
+            chunk = payload[i:i + chunk_size]
+            await client.write_gatt_char(
+                char_uuid,
+                chunk,
+                response=False,
+            )
             await asyncio.sleep(delay)
 
-        # Feed paper so the photo clears the cutter
-        await client.write_gatt_char(char_uuid, b"\n\n\n\n", response=False)
-
-        # Give the printer's internal buffer time to finish printing
-        # before the BLE connection is closed, otherwise the tail end
-        # of the image gets dropped.
-        # print(f"Waiting {max(2.0, len(payload) / 2000):.1f}s for printer to finish...")
-        await asyncio.sleep(5.0)
+        await asyncio.sleep(5)
