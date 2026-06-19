@@ -9,7 +9,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from PIL import Image
 
-from printer import image_to_escpos, send_to_printer
+from printer import print_image
 
 load_dotenv()
 
@@ -63,17 +63,17 @@ def print_photo():
     try:
         image_bytes = decode_photo(photo)
         image = Image.open(BytesIO(image_bytes))
-        payload = image_to_escpos(
+    except Exception as exc:
+        return jsonify({"error": f"Failed to decode photo: {exc}"}), 400
+
+    try:
+        print_image(
+            PRINTER_DEVICE,
             image,
-            PRINTER_WIDTH_PX,
+            width_px=PRINTER_WIDTH_PX,
             rotate=PRINTER_ROTATE,
             brightness=PRINTER_BRIGHTNESS,
         )
-    except Exception as exc:
-        return jsonify({"error": f"Failed to process photo: {exc}"}), 400
-
-    try:
-        send_to_printer(PRINTER_DEVICE, payload)
     except Exception as exc:
         return jsonify({"error": f"Printing failed: {exc}"}), 500
 
