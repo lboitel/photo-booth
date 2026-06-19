@@ -1,4 +1,3 @@
-import asyncio
 import base64
 import os
 import time
@@ -21,8 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent
 TEMP_DIR = BASE_DIR / "temp"
 TEMP_DIR.mkdir(exist_ok=True)
 
-PRINTER_ADDRESS = os.environ.get("PRINTER_ADDRESS")
-PRINTER_CHAR_UUID = os.environ.get("PRINTER_CHAR_UUID")
+PRINTER_DEVICE = os.environ.get("PRINTER_DEVICE", "/dev/usb/lp0")
 PRINTER_WIDTH_PX = int(os.environ.get("PRINTER_WIDTH_PX", "384"))
 PRINTER_ROTATE = int(os.environ.get("PRINTER_ROTATE", "90"))
 PRINTER_BRIGHTNESS = float(os.environ.get("PRINTER_BRIGHTNESS", "1.4"))
@@ -57,11 +55,6 @@ def save_photo():
 
 @app.post("/api/print-photo")
 def print_photo():
-    if not PRINTER_ADDRESS or not PRINTER_CHAR_UUID:
-        return jsonify(
-            {"error": "Printer not configured. Set PRINTER_ADDRESS and PRINTER_CHAR_UUID in .env"}
-        ), 500
-
     body = request.get_json(force=True) or {}
     photo = body.get("photo")
     if not photo:
@@ -80,7 +73,7 @@ def print_photo():
         return jsonify({"error": f"Failed to process photo: {exc}"}), 400
 
     try:
-        asyncio.run(send_to_printer(PRINTER_ADDRESS, PRINTER_CHAR_UUID, payload))
+        send_to_printer(PRINTER_DEVICE, payload)
     except Exception as exc:
         return jsonify({"error": f"Printing failed: {exc}"}), 500
 

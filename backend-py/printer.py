@@ -1,4 +1,3 @@
-import socket
 from PIL import Image, ImageEnhance
 
 ESC = b"\x1b"
@@ -11,7 +10,6 @@ def image_to_escpos(
     rotate: int = 0,
     brightness: float = 1.0,
 ) -> bytes:
-
     if image.mode != "RGB":
         image = image.convert("RGB")
 
@@ -23,18 +21,15 @@ def image_to_escpos(
     image = image.resize((printer_width_px, new_height))
 
     image = image.convert("L")
-
     if brightness != 1.0:
         image = ImageEnhance.Brightness(image).enhance(brightness)
-
-    image = image.convert("1")
+    image = image.convert("1", dither=Image.FLOYDSTEINBERG)
 
     width, height = image.size
     bytes_per_row = (width + 7) // 8
     pixels = image.load()
 
     data = bytearray(bytes_per_row * height)
-
     for y in range(height):
         row_offset = y * bytes_per_row
         for x in range(width):
@@ -42,33 +37,17 @@ def image_to_escpos(
                 data[row_offset + (x // 8)] |= 0x80 >> (x % 8)
 
     header = (
-        ESC + b"@" +
-        GS + b"v0" + b"\x00" +
-        bytes([bytes_per_row & 0xFF, (bytes_per_row >> 8) & 0xFF]) +
-        bytes([height & 0xFF, (height >> 8) & 0xFF])
+        ESC + b"@"
+        + GS + b"v0" + b"\x00"
+        + bytes([bytes_per_row & 0xFF, (bytes_per_row >> 8) & 0xFF])
+        + bytes([height & 0xFF, (height >> 8) & 0xFF])
     )
 
-    return header + data
+    return header + bytes(data)
 
 
-def send_to_printer_rfcomm(
-    printer_addr: str,
-    payload: bytes,
-    port: int = 1,
-    chunk_size: int = 1024,
-    delay: float = 0.01,
-):
-
-    s = socket.socket(
-        socket.AF_BLUETOOTH,
-        socket.SOCK_STREAM,
-        socket.BTPROTO_RFCOMM
-    )
-
-    s.connect((printer_addr, port))
-
-    for i in range(0, len(payload), chunk_size):
-        s.send(payload[i:i + chunk_size])
-
-    s.send(b"\n\n\n")
-    s.close()
+def send_to_printer(device: str, payload: bytes) -> None:
+    with open(device, "wb") as f:
+        f.write(payload)
+        f.write(b"\n\n\n\n")
+        f.flush()
