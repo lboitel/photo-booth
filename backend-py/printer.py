@@ -1,6 +1,4 @@
-import asyncio
-
-from bleak import BleakClient, BleakScanner
+import socket
 from PIL import Image, ImageEnhance
 
 ESC = b"\x1b"
@@ -13,13 +11,7 @@ def image_to_escpos(
     rotate: int = 0,
     brightness: float = 1.0,
 ) -> bytes:
-    """Convert a PIL image to ESC/POS raster bitmap commands (GS v 0).
 
-    rotate: degrees to rotate the image before printing (e.g. 90 for a
-        landscape photo on a narrow receipt).
-    brightness: >1.0 lightens the image before dithering, producing a
-        less "inky" print.
-    """
     if image.mode != "RGB":
         image = image.convert("RGB")
 
@@ -31,55 +23,52 @@ def image_to_escpos(
     image = image.resize((printer_width_px, new_height))
 
     image = image.convert("L")
+
     if brightness != 1.0:
         image = ImageEnhance.Brightness(image).enhance(brightness)
-    image = image.convert("1", dither=Image.FLOYDSTEINBERG)
+
+    image = image.convert("1")
 
     width, height = image.size
     bytes_per_row = (width + 7) // 8
     pixels = image.load()
 
     data = bytearray(bytes_per_row * height)
+
     for y in range(height):
         row_offset = y * bytes_per_row
         for x in range(width):
-            if pixels[x, y] == 0:  # 0 = black in mode "1"
+            if pixels[x, y] == 0:
                 data[row_offset + (x // 8)] |= 0x80 >> (x % 8)
 
     header = (
-        ESC + b"@"  # initialize printer
-        + GS + b"v0" + b"\x00"
-        + bytes([bytes_per_row & 0xFF, (bytes_per_row >> 8) & 0xFF])
-        + bytes([height & 0xFF, (height >> 8) & 0xFF])
+        ESC + b"@" +
+        GS + b"v0" + b"\x00" +
+        bytes([bytes_per_row & 0xFF, (bytes_per_row >> 8) & 0xFF]) +
+        bytes([height & 0xFF, (height >> 8) & 0xFF])
     )
 
-    return header + bytes(data)
+    return header + data
 
-async def send_to_printer(
-    address: str,
-    char_uuid: str,
+
+def send_to_printer_rfcomm(
+    printer_addr: str,
     payload: bytes,
-    chunk_size: int = 180,
-    delay: float = 0.02,
+    port: int = 1,
+    chunk_size: int = 1024,
+    delay: float = 0.01,
 ):
 
-    device = await BleakScanner.find_device_by_address(
-        address,
-        timeout=10.0,
+    s = socket.socket(
+        socket.AF_BLUETOOTH,
+        socket.SOCK_STREAM,
+        socket.BTPROTO_RFCOMM
     )
 
-    print(device)
+    s.connect((printer_addr, port))
 
-    async with BleakClient(device) as client:
-        print("connected:", client.is_connected)
+    for i in range(0, len(payload), chunk_size):
+        s.send(payload[i:i + chunk_size])
 
-        for i in range(0, len(payload), chunk_size):
-            chunk = payload[i:i + chunk_size]
-            await client.write_gatt_char(
-                char_uuid,
-                chunk,
-                response=False,
-            )
-            await asyncio.sleep(delay)
-
-        await asyncio.sleep(5)
+    s.send(b"\n\n\n")
+    s.close()
